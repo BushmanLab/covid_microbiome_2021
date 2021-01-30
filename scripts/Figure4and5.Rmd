@@ -1,0 +1,549 @@
+---
+title: "Figure4and5"
+date: "1/26/2021"
+output: html_document
+---
+
+# Results
+
+```{r library setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,
+                      warning = FALSE,
+                      message = FALSE
+                      )
+
+suppressPackageStartupMessages(library(ggplot2))
+suppressPackageStartupMessages(library(randomcoloR))
+suppressPackageStartupMessages(library(tidyverse))
+suppressPackageStartupMessages(library(dplyr))
+suppressPackageStartupMessages(library(readxl))
+suppressPackageStartupMessages(library(gridExtra))
+suppressPackageStartupMessages(library(grid))
+suppressPackageStartupMessages(library(ggbeeswarm))
+suppressPackageStartupMessages(library(DiagrammeR))
+suppressPackageStartupMessages(library(qiimer))
+suppressPackageStartupMessages(library(ape))
+suppressPackageStartupMessages(library(scales))
+suppressPackageStartupMessages(library(vegan))
+suppressPackageStartupMessages(library(openxlsx))
+suppressPackageStartupMessages(library(reshape2))
+suppressPackageStartupMessages(library(randomForest))
+suppressPackageStartupMessages(library(pROC))
+suppressPackageStartupMessages(library(ggpubr))
+suppressPackageStartupMessages(library(ggformula))
+```
+
+```{r color, echo=FALSE, results='hide',fig.keep='none'}
+
+guan.color<-alpha(c("#7493cb","#f89a1d","#73cedf","#99991EFF","#BFA8CC","#60BC34","#FAD3D3","#E62187","#15B2EA","#269C79"),1)
+barplot(rep(1,10),rep(1,10),col=guan.color,space=0,horiz = T,axes = F,xlim=c(0,5))
+text(x=rep(0.5,10),y=seq(0.5,9.5,by=1),1:10,cex=1)
+```
+
+```{r meta data, echo=FALSE}
+### prepare all files
+sample<-read_excel("./data/raw/meta.12.10.2020.xlsx", sheet = "5")
+#sample$date_collected<-convertToDate(sample$date_collected, origin = "1900-01-01")
+
+subject<-read_excel("./data/raw/meta.12.10.2020.xlsx", sheet = "2")
+subject$Intubation_date<-convertToDate(subject$Intubation_date, origin = "1900-01-01")
+# subject$COVID_Pos_Date<-convertToDate(subject$COVID_Pos_Date, origin = "1900-01-01")
+# subject$Discharged_date<-convertToDate(subject$Discharged_date, origin = "1900-01-01")
+# subject$Deceased_date<-convertToDate(subject$Deceased_date, origin = "1900-01-01")
+subject$Admission_Date<-as.Date(subject$Admission_Date)
+s<-sample%>%right_join(subject,"SubjectID")%>%filter(!is.na(SampleID))%>%
+  mutate(date_collected=as.Date(date_collected, "%m/%d/%Y"))%>%
+  group_by(SubjectID)%>%
+  mutate(day_to_first_sample=date_collected-min(date_collected))%>%
+  mutate(day_intubation=date_collected-Intubation_date)%>%
+  mutate(day_admit=date_collected-Admission_Date)%>%
+  ungroup()
+```
+
+## Figure 4C
+```{r, echo=T,fig.keep='all',fig.width=5}
+virus<-read.delim("./data/raw/virus.tsv")[,c(1,3,6,8)]
+virus<-virus%>%gather(-SampleID,key="genus",value=abun)
+
+df<-virus%>%left_join(s)%>%filter(study_group=="COVID")
+
+tmp<-df%>%filter(sample_type=="Oropharyngeal swab",genus=="rv_copy")%>%
+  group_by(SubjectID)%>%
+  top_n(-2,day_to_first_sample)%>%
+  ungroup()%>%
+  arrange(desc(abun))%>%
+  distinct(SubjectID,.keep_all = T)%>%
+  mutate(RV=ifelse(abun>0,"Positive","Negative"))
+
+p<-tmp%>%
+  group_by(Intubated,RV)%>%
+  summarise(n=n())
+p$Intubated<-factor(p$Intubated,levels=c("yes","no"))
+g<-ggplot(p,aes(x=Intubated,y=n,fill=RV))+
+  geom_bar(position="stack", stat="identity",width = 0.5)+
+  scale_fill_manual(values=c("grey80","#2ffffe"))+
+  #xlab("")+
+  annotate("text", x=c(1.5),y=c(47),size=5, label= "p = 0.0007")+
+  annotate("segment", x = c(1), xend = c(2), y = c(45), yend = c(45))+
+  ylab("Individual count")+
+  ylim(0,50)+
+  theme_classic()+
+  theme(axis.text = element_text(color="black",size=20),
+        axis.ticks.length.y = unit(0.25,"cm"),
+        axis.title = element_text(color="black",size=25),
+        legend.position = "none")
+g
+pdf("Figure4C.pdf",width=4,height = 5)
+g
+dev.off()
+```
+
+## Figure 4B
+```{r, echo=T,fig.keep='all',fig.width=5}
+tmp<-df%>%filter(sample_type=="Oropharyngeal swab",genus=="ttv_copy")%>%
+  group_by(SubjectID)%>%
+  top_n(-2,day_to_first_sample)%>%
+  ungroup()%>%
+  arrange(desc(abun))%>%
+  distinct(SubjectID,.keep_all = T)%>%
+  mutate(RV=ifelse(abun>0,"Positive","Negative"))
+
+p<-tmp%>%
+  group_by(Intubated,RV)%>%
+  summarise(n=n())
+p$Intubated<-factor(p$Intubated,levels=c("yes","no"))
+g<-ggplot(p,aes(x=Intubated,y=n,fill=RV))+
+  geom_bar(position="stack", stat="identity",width = 0.5)+
+  scale_fill_manual(values=c("grey80","#f87d6f"))+
+  #xlab("")+
+  ylab("Individual count")+
+  ylim(0,50)+
+  annotate("text", x=c(1.5),y=c(47),size=5, label= "p = 0.001")+
+  annotate("segment", x = c(1), xend = c(2), y = c(45), yend = c(45))+
+  theme_classic()+
+  theme(axis.text = element_text(color="black",size=20),
+        axis.ticks.length.y = unit(0.25,"cm"),
+        axis.title = element_text(color="black",size=25),
+        legend.position = "none")
+g
+pdf("Figure4B.pdf",width=4,height = 5)
+g
+dev.off()
+```
+
+## Figure 5
+
+### randomforest classify OP Intubated/not 
+```{r, echo=FALSE,results='hide',fig.keep='all',fig.width=5}
+#covid<-as.data.frame(read.delim("/media/lorax/users/guanxiang/12.covid.16s/input/COVID_ONLY_counts_genus_level.csv",sep=","))
+covid<-as.data.frame(read.delim("./data/from_scripts/counts_without_contaminants_genus.csv",sep=","))
+
+names(covid)[1]<-"SampleID"
+covid<-covid%>%gather(-SampleID,key="genus",value="count")%>%
+  group_by(SampleID)%>%
+  mutate(abun=count/sum(count))%>%
+  ungroup()%>%
+  select(SampleID,genus,abun)
+
+keep<-covid%>%
+  group_by(genus)%>%
+  filter(abun>=0.1)
+
+covid<-covid%>%
+  filter(genus %in% unique(keep$genus))
+
+
+virus<-read.delim("/media/lorax/users/guanxiang/12.covid.16s/virus.tsv")[,c(1,8)]
+virus<-virus%>%gather(-SampleID,key="genus",value=abun)
+
+df<-rbind(covid,virus)%>%left_join(s)%>%
+  filter(study_group=="COVID")
+  
+
+keep<-df%>%filter(sample_type=="Oropharyngeal swab",genus=="small_circular_virus")%>%
+  group_by(SubjectID)%>%
+  top_n(-2,day_to_first_sample)%>%
+  ungroup()%>%
+  arrange(desc(abun))%>%
+  distinct(SubjectID,.keep_all = T)
+
+rf.data<-df%>%
+  filter(SampleID %in% unique(keep$SampleID))%>%
+  select(SampleID,genus,abun,Intubated)%>%
+  spread(key=genus,value=abun)%>%
+  select(-SampleID)%>%
+  mutate(Intubated=as.factor(Intubated))%>%
+  replace(is.na(.),0)# remove na in row
+  
+
+
+#rf.data$diversity<-diversity(rf.data[, -c(1,ncol(rf.data)-1)],
+#                                 MARGIN = 1,
+#                                 index = "simpson")
+
+l<-c()
+j=1
+for (i in 1:1000) { 
+set.seed(i)
+erie.classify <- randomForest(Intubated~., data = rf.data, ntree = 1000)
+#boxplot(1-erie.classify$err.rate[,1],ylim=c(0.6,0.9),ylab=c("Accuracy Rate"))
+p<-mean(erie.classify$err.rate[,1])
+l[[j]]<-data.frame(p=p)
+j=j+1
+}
+
+
+
+# Make a data frame with predictor names and their importance
+imp <- importance(erie.classify)
+imp <- data.frame(predictors = rownames(imp), imp)
+
+# Order the predictor levels by importance
+imp.sort <- arrange(imp, desc(MeanDecreaseGini))
+imp.sort$predictors <- factor(imp.sort$predictors, levels = imp.sort$predictors)
+
+# Select the top 10 predictors
+imp.20 <- imp.sort[1:15, ]
+
+
+# ggplot
+g<-ggplot(imp.20, aes(x = predictors, y = MeanDecreaseGini))+
+  geom_bar(stat = "identity", fill = "indianred") +
+  coord_flip() +
+  scale_x_discrete(limits = rev(imp.20$predictors))+
+  #ggtitle("Most important Taxa for Intubated or not")+
+  ylab("Importance score")+
+  theme_classic()+
+  theme(axis.text = element_text(color="black",size=20),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(color="black",size=25))
+g
+pdf("Figure5B.pdf",width = 7,height =7 )
+g
+dev.off()
+
+rf.roc<-roc(rf.data$Intubated,erie.classify$votes[,2])
+plot(rf.roc,main="ROC curve",xlim=c(1,0))
+auc(rf.roc)
+
+roc.iop<-data.frame(s=rev(1-rf.roc$specificities),n=rev(rf.roc$sensitivities),group=rep("Oropharyngeal swab (AUROC=0.86)",length(rf.roc$sensitivities)))
+
+tmp<-df%>%filter(genus=="small_circular_virus",sample_type=="Oropharyngeal swab")
+keep=tmp%>%filter(day_intubation<0)
+tmp%>%filter(!is.na(day_intubation))%>%
+ ggplot(aes(x=day_intubation,y=log(abun+1,10)))+
+ geom_point()
+
+tmp%>%filter(SubjectID=="CORE0260")%>%
+  ggplot(aes(x=day_intubation,y=log(abun+1,10)))+
+ geom_point()+
+  geom_line()
+```
+
+### randomforest classify OP WHO group (4-6;7-10)
+```{r, echo=FALSE,results='hide',fig.keep='all',fig.width=5}
+#covid<-as.data.frame(read.delim("/media/lorax/users/guanxiang/12.covid.16s/input/COVID_ONLY_counts_genus_level.csv",sep=","))
+covid<-as.data.frame(read.delim("/home/cmeren/rotation_2020/COVID/final_analysis/data/from_scripts/counts_without_contaminants_genus.csv",sep=","))
+names(covid)[1]<-"SampleID"
+covid<-covid%>%gather(-SampleID,key="genus",value="count")%>%
+  group_by(SampleID)%>%
+  mutate(abun=count/sum(count))%>%
+  ungroup()%>%
+  select(SampleID,genus,abun)
+
+keep<-covid%>%
+  group_by(genus)%>%
+  filter(abun>=0.1)
+
+covid<-covid%>%
+  filter(genus %in% unique(keep$genus))
+
+
+virus<-read.delim("/media/lorax/users/guanxiang/12.covid.16s/virus.tsv")[,c(1,8)]
+virus<-virus%>%gather(-SampleID,key="genus",value=abun)
+
+df<-rbind(covid,virus)%>%left_join(s)%>%
+  filter(study_group=="COVID")
+  
+keep<-df%>%filter(sample_type=="Oropharyngeal swab",genus=="small_circular_virus")%>%
+  group_by(SubjectID)%>%
+  top_n(-2,day_to_first_sample)%>%
+  ungroup()%>%
+  arrange(desc(abun))%>%
+  distinct(SubjectID,.keep_all = T)
+
+rf.data<-df%>%
+  filter(SampleID %in% unique(keep$SampleID))%>%
+  select(SampleID,genus,abun,WHO_score_group)%>%
+  spread(key=genus,value=abun)%>%
+  select(-SampleID)%>%
+  mutate(WHO_score_group=as.factor(WHO_score_group))%>%
+   replace(is.na(.),0)# remove na in row
+
+
+# rf.data$diversity<-diversity(rf.data[, -c(1,ncol(rf.data)-2,ncol(rf.data)-1)],
+#                                  MARGIN = 1,
+#                                  index = "invsimpson")
+#   
+set.seed(1)
+erie.classify <- randomForest(WHO_score_group~., data = rf.data, ntree = 1000)
+boxplot(1-erie.classify$err.rate[,1],ylim=c(0.6,0.9),ylab=c("Accuracy Rate"))
+erie.classify 
+
+# Make a data frame with predictor names and their importance
+imp <- importance(erie.classify)
+imp <- data.frame(predictors = rownames(imp), imp)
+
+# Order the predictor levels by importance
+imp.sort <- arrange(imp, desc(MeanDecreaseGini))
+imp.sort$predictors <- factor(imp.sort$predictors, levels = imp.sort$predictors)
+
+# Select the top 10 predictors
+imp.20 <- imp.sort[1:15, ]
+
+
+# ggplot
+g<-ggplot(imp.20, aes(x = predictors, y = MeanDecreaseGini))+
+  geom_bar(stat = "identity", fill = "indianred") +
+  coord_flip() +
+  scale_x_discrete(limits = rev(imp.20$predictors))+
+  #ggtitle("Most important Taxa for Intubated or not")+
+  ylab("Importance score")+
+  theme_classic()+
+  theme(axis.text = element_text(color="black",size=20),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(color="black",size=25))
+g
+pdf("Figure5E.pdf",width = 7,height =7 )
+g
+dev.off()
+
+rf.roc<-roc(rf.data$WHO_score_group,erie.classify$votes[,2])
+plot(rf.roc,main="ROC curve")
+auc(rf.roc)
+
+roc.sop<-data.frame(s=rev(1-rf.roc$specificities),n=rev(rf.roc$sensitivities),group=rep("Oropharyngeal swab (AUROC=0.82)",length(rf.roc$sensitivities)))
+```
+
+### randomforest classify NP Intubated/not 
+```{r, echo=FALSE,results='hide',fig.keep='all',fig.width=5}
+#covid<-as.data.frame(read.delim("/media/lorax/users/guanxiang/12.covid.16s/input/COVID_ONLY_counts_genus_level.csv",sep=","))
+covid<-as.data.frame(read.delim("/home/cmeren/rotation_2020/COVID/final_analysis/data/from_scripts/counts_without_contaminants_genus.csv",sep=","))
+
+names(covid)[1]<-"SampleID"
+covid<-covid%>%gather(-SampleID,key="genus",value="count")%>%
+  group_by(SampleID)%>%
+  mutate(abun=count/sum(count))%>%
+  ungroup()%>%
+  select(SampleID,genus,abun)
+
+keep<-covid%>%
+  group_by(genus)%>%
+  filter(abun>=0.1)
+
+covid<-covid%>%
+  filter(genus %in% unique(keep$genus))
+
+
+virus<-read.delim("/media/lorax/users/guanxiang/12.covid.16s/virus.tsv")[,c(1,8)]
+virus<-virus%>%gather(-SampleID,key="genus",value=abun)
+
+df<-rbind(covid,virus)%>%left_join(s)%>%
+  filter(study_group=="COVID")
+  
+keep<-df%>%filter(sample_type=="Nasopharyngeal swab",genus=="small_circular_virus")%>%
+  group_by(SubjectID)%>%
+  top_n(-2,day_to_first_sample)%>%
+  ungroup()%>%
+  arrange(desc(abun))%>%
+  distinct(SubjectID,.keep_all = T)
+
+rf.data<-df%>%
+  filter(SampleID %in% unique(keep$SampleID))%>%
+  select(SampleID,genus,abun,Intubated)%>%
+  spread(key=genus,value=abun)%>%
+  select(-SampleID)%>%
+  mutate(Intubated=as.factor(Intubated))%>%
+   replace(is.na(.),0)# remove na in row
+
+
+# rf.data$diversity<-diversity(rf.data[, -c(1,ncol(rf.data)-2,ncol(rf.data)-1)],
+#                                  MARGIN = 1,
+#                                  index = "invsimpson")
+  
+set.seed(1)
+erie.classify <- randomForest(Intubated~., data = rf.data, ntree = 1000)
+boxplot(1-erie.classify$err.rate[,1],ylim=c(0.6,0.9),ylab=c("Accuracy Rate"))
+
+
+# Make a data frame with predictor names and their importance
+imp <- importance(erie.classify)
+imp <- data.frame(predictors = rownames(imp), imp)
+
+# Order the predictor levels by importance
+imp.sort <- arrange(imp, desc(MeanDecreaseGini))
+imp.sort$predictors <- factor(imp.sort$predictors, levels = imp.sort$predictors)
+
+# Select the top 10 predictors
+imp.20 <- imp.sort[1:15, ]
+
+# ggplot
+g<-ggplot(imp.20, aes(x = predictors, y = MeanDecreaseGini))+
+  geom_bar(stat = "identity", fill = "indianred") +
+  coord_flip() +
+  scale_x_discrete(limits = rev(imp.20$predictors))+
+  #ggtitle("Most important Taxa for Intubated or not")+
+  ylab("Importance score")+
+  theme_classic()+
+  theme(axis.text = element_text(color="black",size=20),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(color="black",size=25))
+g
+pdf("Figure5C.pdf",width = 7,height =7 )
+g
+dev.off()
+
+
+rf.roc<-roc(rf.data$Intubated,erie.classify$votes[,2])
+plot(rf.roc,main="ROC curve",xlim=c(1,0))
+auc(rf.roc)
+
+roc.inp<-data.frame(s=rev(1-rf.roc$specificities),n=rev(rf.roc$sensitivities),group=rep("Nasopharyngeal swab (AUROC=0.80)",length(rf.roc$sensitivities)))
+
+
+
+```
+
+### randomforest classify NP WHO group (4-6;7-10)
+```{r, echo=FALSE,results='hide',fig.keep='all',fig.width=5}
+#covid<-as.data.frame(read.delim("/media/lorax/users/guanxiang/12.covid.16s/input/COVID_ONLY_counts_genus_level.csv",sep=","))
+covid<-as.data.frame(read.delim("/home/cmeren/rotation_2020/COVID/final_analysis/data/from_scripts/counts_without_contaminants_genus.csv",sep=","))
+
+names(covid)[1]<-"SampleID"
+covid<-covid%>%gather(-SampleID,key="genus",value="count")%>%
+  group_by(SampleID)%>%
+  mutate(abun=count/sum(count))%>%
+  ungroup()%>%
+  select(SampleID,genus,abun)
+
+keep<-covid%>%
+  group_by(genus)%>%
+  filter(abun>=0.1)
+
+covid<-covid%>%
+  filter(genus %in% unique(keep$genus))
+
+
+virus<-read.delim("/media/lorax/users/guanxiang/12.covid.16s/virus.tsv")[,c(1,8)]
+virus<-virus%>%gather(-SampleID,key="genus",value=abun)
+
+df<-rbind(covid,virus)%>%left_join(s)%>%
+  filter(study_group=="COVID")
+  
+keep<-df%>%filter(sample_type=="Nasopharyngeal swab",genus=="small_circular_virus")%>%
+  group_by(SubjectID)%>%
+  top_n(-2,day_to_first_sample)%>%
+  ungroup()%>%
+  arrange(desc(abun))%>%
+  distinct(SubjectID,.keep_all = T)
+
+rf.data<-df%>%
+  filter(SampleID %in% unique(keep$SampleID))%>%
+  select(SampleID,genus,abun,WHO_score_group)%>%
+  spread(key=genus,value=abun)%>%
+  select(-SampleID)%>%
+  mutate(WHO_score_group=as.factor(WHO_score_group))%>%
+   replace(is.na(.),0)# remove na in row
+
+
+# rf.data$diversity<-diversity(rf.data[, -c(1,ncol(rf.data)-2,ncol(rf.data)-1)],
+#                                  MARGIN = 1,
+#                                  index = "invsimpson")
+#   
+set.seed(1)
+erie.classify <- randomForest(WHO_score_group~., data = rf.data, ntree = 1000)
+boxplot(1-erie.classify$err.rate[,1],ylim=c(0.6,0.9),ylab=c("Accuracy Rate"))
+erie.classify 
+
+# Make a data frame with predictor names and their importance
+imp <- importance(erie.classify)
+imp <- data.frame(predictors = rownames(imp), imp)
+
+# Order the predictor levels by importance
+imp.sort <- arrange(imp, desc(MeanDecreaseGini))
+imp.sort$predictors <- factor(imp.sort$predictors, levels = imp.sort$predictors)
+
+# Select the top 10 predictors
+imp.20 <- imp.sort[1:15, ]
+
+g<-ggplot(imp.20, aes(x = predictors, y = MeanDecreaseGini))+
+  geom_bar(stat = "identity", fill = "indianred") +
+  coord_flip() +
+  scale_x_discrete(limits = rev(imp.20$predictors))+
+  #ggtitle("Most important Taxa for Intubated or not")+
+  ylab("Importance score")+
+  theme_classic()+
+  theme(axis.text = element_text(color="black",size=20),
+        axis.title.y = element_blank(),
+        axis.title.x = element_text(color="black",size=25))
+
+g
+pdf("Figure5F.pdf",width = 7,height =7 )
+g
+dev.off()
+
+rf.roc<-roc(rf.data$WHO_score_group,erie.classify$votes[,2])
+plot(rf.roc,main="ROC curve")
+auc(rf.roc)
+
+roc.snp<-data.frame(s=rev(1-rf.roc$specificities),n=rev(rf.roc$sensitivities),group=rep("Nasopharyngeal swab (AUROC=0.75)",length(rf.roc$sensitivities)))
+```
+
+### ROC plot
+```{r, echo=FALSE,results='hide',fig.keep='all',fig.width=5}
+tmp<-rbind(roc.iop,roc.inp)
+g<-ggplot(tmp,aes(x=s,y=n,group=group,color=group))+
+  xlab("False positive rate")+
+  ylab("True positive rate")+
+ # xlim(1,0)+
+  geom_line(size=2)+
+  #geom_spline(size=2)+
+  scale_color_manual(values=guan.color[1:2])+
+  #scale_x_continuous(limits = c(0,1), expand = c(0, 0)) +
+  #scale_y_continuous(limits = c(0.1,1), expand = c(0, 0)) +
+  #geom_text(x = 0.5, y = 0.5,label ="Average accuracy rate = 82%",size=8,color="black")+
+  theme_classic()+
+  labs(color = "Sample types")+
+  theme(axis.text = element_text(color="black",size=20),
+        axis.title = element_text(color="black",size=25),
+        legend.text = element_text(color="black",size=15),
+        legend.title = element_text(color="black",size=20),
+        legend.position = c(0.5,0.3))
+g
+pdf("Figure5A.pdf",width = 7,height =7 )
+g
+dev.off()
+
+tmp<-rbind(roc.sop,roc.snp)
+g<-ggplot(tmp,aes(x=s,y=n,group=group,color=group))+
+  xlab("False positive rate")+
+  ylab("True positive rate")+
+ # xlim(1,0)+
+  geom_line(size=2)+
+  #geom_spline(size=2)+
+  scale_color_manual(values=guan.color[1:2])+
+  #geom_text(x = 0.5, y = 0.5,label ="Average accuracy rate = 82%",size=8,color="black")+
+  theme_classic()+
+  labs(color = "Sample types")+
+  #scale_x_continuous(limits = c(0,1), expand = c(0, 0)) +
+  #scale_y_continuous(limits = c(0.1,1), expand = c(0, 0)) +
+  theme(axis.text = element_text(color="black",size=20),
+        axis.title = element_text(color="black",size=25),
+        legend.text = element_text(color="black",size=15),
+        legend.title = element_text(color="black",size=20),
+        legend.position = c(0.5,0.3))
+g
+pdf("Figure5D.pdf",width = 7,height =7 )
+g
+dev.off()
+```
